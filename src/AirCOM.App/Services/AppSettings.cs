@@ -31,6 +31,9 @@ public sealed class AppSettings
     /// <summary>Last used remote host (A-side) or empty.</summary>
     public string? LastRemoteHost { get; set; }
 
+    /// <summary>Last used B-side serial port name (e.g. COM4).</summary>
+    public string? LastSelectedPort { get; set; }
+
     /// <summary>Last used remote/listen port.</summary>
     public int LastTcpPort { get; set; } = 51000;
 

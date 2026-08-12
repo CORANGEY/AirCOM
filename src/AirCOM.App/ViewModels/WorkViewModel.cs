@@ -31,15 +31,21 @@ public partial class WorkViewModel : ObservableObject, IDisposable
         _role = role;
         _window = window;
 
+        // Load persisted settings (shared across versions via %AppData%\AirCOM).
+        var s = AppSettings.Load();
+        RemoteHost = string.IsNullOrEmpty(s.LastRemoteHost) ? "192.168.137.2" : s.LastRemoteHost;
+        ListenPort = s.LastTcpPort > 0 ? s.LastTcpPort : 51000;
+        RemotePort = s.LastTcpPort > 0 ? s.LastTcpPort : 51000;
+        BaudRate = s.LastBaudRate > 0 ? s.LastBaudRate : 115200;
+
         if (role == AppRole.BSide)
         {
             RefreshPorts();
-            SelectedPort = Ports.FirstOrDefault() ?? "";
+            // Restore last selected port if it still exists.
+            SelectedPort = (!string.IsNullOrEmpty(s.LastSelectedPort) && Ports.Contains(s.LastSelectedPort))
+                ? s.LastSelectedPort
+                : (Ports.FirstOrDefault() ?? "");
         }
-        RemoteHost = "192.168.137.2";
-        RemotePort = 51000;
-        ListenPort = 51000;
-        BaudRate = 115200;
         VirtualPortDisplay = "待分配";
         Com0comStatus = "";
         UpdateActionLabel();
@@ -184,11 +190,13 @@ public partial class WorkViewModel : ObservableObject, IDisposable
             IsRunning = true;
             StatusText = $"已连接 {RemoteHost}:{RemotePort}";
             AppendLog($"已连接 B 端 {RemoteHost}:{RemotePort}，串口软件请打开 {userPort}");
+            SaveSettings(); // persist for next launch
         }
         catch (Exception ex)
         {
-            AppendLog($"连接失败：{ex.Message}");
-            Com0comStatus = $"失败：{ex.Message}";
+            string msg = FriendlyError(ex, RemoteHost, RemotePort);
+            AppendLog($"连接失败：{msg}");
+            Com0comStatus = $"失败：{msg}";
             _aHost?.DisposeAsync().AsTask().GetAwaiter().GetResult();
             _aHost = null;
         }
@@ -214,10 +222,11 @@ public partial class WorkViewModel : ObservableObject, IDisposable
             IsRunning = true;
             StatusText = $"监听中（端口 {ListenPort}），共享 {SelectedPort}";
             AppendLog($"已启动：串口 {SelectedPort} @ {BaudRate}，监听 {ListenPort}");
+            SaveSettings(); // persist for next launch
         }
         catch (Exception ex)
         {
-            AppendLog($"启动失败：{ex.Message}");
+            AppendLog($"启动失败：{FriendlyError(ex, SelectedPort, ListenPort)}");
             _bHost?.DisposeAsync().AsTask().GetAwaiter().GetResult();
             _bHost = null;
         }
@@ -249,13 +258,73 @@ public partial class WorkViewModel : ObservableObject, IDisposable
     private void OnStats(object? s, FlowStats stats) =>
         AppendLog($"流量：→网络 {stats.BytesSerialToNet} B，→串口 {stats.BytesNetToSerial} B");
 
-    private void OnStopped(object? s, Exception? ex) =>
-        AppendLog($"桥接停止：{(ex is null ? "正常" : ex.Message)}");
+    private void OnStopped(object? s, Exception? ex)
+    {
+        // Bridge stopped (peer disconnected or error). Reset UI to allow reconnect.
+        // Runs on a background thread -> dispatch to UI thread.
+        _window.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            AppendLog($"桥接停止：{(ex is null ? "正常" : ex.Message)}");
+            if (_aHost is not null) { try { _aHost.DisposeAsync().AsTask().GetAwaiter().GetResult(); } catch { } _aHost = null; }
+            if (_bHost is not null) { try { _bHost.DisposeAsync().AsTask().GetAwaiter().GetResult(); } catch { } _bHost = null; }
+            IsRunning = false;
+            StatusText = "已断开（可重新连接）";
+        }));
+    }
 
-    private void OnConnState(object? s, bool connected) =>
-        AppendLog(connected ? "对端已连接" : "对端已断开");
+    private void OnConnState(object? s, bool connected)
+    {
+        _window.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            AppendLog(connected ? "对端已连接" : "对端已断开");
+            if (!connected && IsRunning)
+            {
+                StatusText = "对端已断开（正在停止...）";
+            }
+        }));
+    }
 
     private void AppendLog(string msg) => LogText += $"[{DateTime.Now:HH:mm:ss}] {msg}\n";
+
+    /// <summary>Translates common exceptions into clear Chinese hints.</summary>
+    private string FriendlyError(Exception ex, string hostOrPort, int tcpPort)
+    {
+        string m = ex.Message ?? "";
+        // Serial port in use ("拒绝访问" / "Access denied")
+        if (ex is System.UnauthorizedAccessException || m.Contains("拒绝访问") || m.Contains("Access Denied"))
+        {
+            return $"串口 {SelectedPort} 被其他程序占用，请关闭占用它的程序后重试";
+        }
+        // TCP port in use
+        if (ex is System.Net.Sockets.SocketException se &&
+            (se.SocketErrorCode == System.Net.Sockets.SocketError.AddressAlreadyInUse
+             || m.Contains("通常只允许使用") || m.Contains("Only one usage")))
+        {
+            return $"监听端口 {tcpPort} 已被占用，请换个端口或关闭占用它的程序";
+        }
+        // A-side can't reach B-side (connection refused / timeout)
+        if (ex is System.Net.Sockets.SocketException)
+        {
+            return $"无法连接到 {hostOrPort}:{tcpPort}。请检查：1) B 端是否已启动监听；2) IP/端口是否正确；3) 网络是否通；4) B 端防火墙是否放行";
+        }
+        return m;
+    }
+
+    /// <summary>Saves the current inputs (host/port/baud/selected port) so the next launch reuses them.</summary>
+    private void SaveSettings()
+    {
+        try
+        {
+            var s = AppSettings.Load();
+            // Preserve the assigned port pair (don't overwrite UserPort/ServicePort).
+            if (IsASide) s.LastRemoteHost = RemoteHost;
+            if (IsBSide) s.LastSelectedPort = SelectedPort;
+            s.LastTcpPort = IsASide ? RemotePort : ListenPort;
+            s.LastBaudRate = BaudRate;
+            s.Save();
+        }
+        catch { /* settings persistence is best-effort */ }
+    }
 
     public void Dispose()
     {
