@@ -1,0 +1,55 @@
+<Window x:Class="AirCOM.Client.A.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:AirCOM.Client.A.ViewModels"
+        xmlns:local="clr-namespace:AirCOM.Client.A.Views"
+        Title="AirCOM - A 端（使用远程串口）" Height="600" Width="720"
+        WindowStartupLocation="CenterScreen">
+    <Window.DataContext>
+        <vm:MainViewModel/>
+    </Window.DataContext>
+    <Window.Resources>
+        <local:InverseBoolConverter x:Key="InverseBoolConverter"/>
+    </Window.Resources>
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <GroupBox Header="连接配置" Grid.Row="0" Margin="0,0,0,8" Padding="8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="B 端 IP:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <TextBox Grid.Column="1" Text="{Binding RemoteHost}" MinWidth="160" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="端口:" VerticalAlignment="Center" Margin="16,0,6,0"/>
+                <TextBox Grid.Column="3" Text="{Binding RemotePort}" MinWidth="80" VerticalAlignment="Center"/>
+            </Grid>
+        </GroupBox>
+
+        <StackPanel Orientation="Horizontal" Grid.Row="1" Margin="0,0,0,8">
+            <TextBlock Text="虚拟口:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <TextBox Text="{Binding VirtualPortName}" MinWidth="80" VerticalAlignment="Center"/>
+            <TextBlock Text="波特率:" VerticalAlignment="Center" Margin="16,0,6,0"/>
+            <TextBox Text="{Binding BaudRate}" MinWidth="80" VerticalAlignment="Center"/>
+            <Button Content="连接" Command="{Binding ConnectCommand}" Margin="12,0,0,0" Padding="20,4"
+                    IsEnabled="{Binding IsConnected, Converter={StaticResource InverseBoolConverter}}"/>
+            <Button Content="断开" Command="{Binding DisconnectCommand}" Margin="8,0,0,0" Padding="20,4"
+                    IsEnabled="{Binding IsConnected}"/>
+        </StackPanel>
+
+        <TextBlock Grid.Row="2" Text="{Binding StatusText}" FontWeight="Bold" Margin="0,0,0,8"/>
+
+        <GroupBox Header="日志" Grid.Row="3" Padding="4">
+            <TextBox Text="{Binding LogText}" IsReadOnly="True" TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12"/>
+        </GroupBox>
+    </Grid>
+</Window>

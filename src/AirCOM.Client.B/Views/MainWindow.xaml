@@ -1,0 +1,58 @@
+<Window x:Class="AirCOM.Client.B.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:AirCOM.Client.B.ViewModels"
+        Title="AirCOM - B 端（提供串口）" Height="600" Width="720"
+        WindowStartupLocation="CenterScreen">
+    <Window.DataContext>
+        <vm:MainViewModel/>
+    </Window.DataContext>
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <local:InverseBoolConverter x:Key="InverseBoolConverter" xmlns:local="clr-namespace:AirCOM.Client.B.Views"/>
+    </Window.Resources>
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 配置区 -->
+        <GroupBox Header="配置" Grid.Row="0" Margin="0,0,0,8" Padding="8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Text="共享串口:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <ComboBox Grid.Column="1" ItemsSource="{Binding Ports}" SelectedItem="{Binding SelectedPort}"
+                          MinWidth="140" VerticalAlignment="Center"/>
+                <Button Grid.Column="2" Content="刷新" Command="{Binding RefreshPortsCommand}" Margin="6,0,0,0" Padding="12,2"/>
+                <TextBlock Grid.Column="3" Text="监听端口:" VerticalAlignment="Center" Margin="16,0,6,0"/>
+                <TextBox Grid.Column="4" Text="{Binding ListenPort}" MinWidth="80" VerticalAlignment="Center"/>
+            </Grid>
+        </GroupBox>
+
+        <StackPanel Orientation="Horizontal" Grid.Row="1" Margin="0,0,0,8">
+            <TextBlock Text="波特率:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <TextBox Text="{Binding BaudRate}" MinWidth="80" VerticalAlignment="Center"/>
+            <Button Content="启动" Command="{Binding StartCommand}" Margin="12,0,0,0" Padding="20,4"
+                    IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBoolConverter}}"/>
+            <Button Content="停止" Command="{Binding StopCommand}" Margin="8,0,0,0" Padding="20,4"
+                    IsEnabled="{Binding IsRunning}"/>
+        </StackPanel>
+
+        <TextBlock Grid.Row="2" Text="{Binding StatusText}" FontWeight="Bold" Margin="0,0,0,8"/>
+
+        <GroupBox Header="日志" Grid.Row="3" Padding="4">
+            <TextBox Text="{Binding LogText}" IsReadOnly="True" TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12"/>
+        </GroupBox>
+    </Grid>
+</Window>

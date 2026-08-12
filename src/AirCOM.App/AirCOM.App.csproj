@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>AirCOM.App</RootNamespace>
+    <AssemblyName>AirCOM</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="$(CommunityToolkitMvvmVersion)" />
+    <PackageReference Include="H.NotifyIcon.Wpf" Version="$(HNotifyIconVersion)" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="$(HostingVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AirCOM.Core\AirCOM.Core.csproj" />
+    <ProjectReference Include="..\AirCOM.Client.A\AirCOM.Client.A.csproj" />
+    <ProjectReference Include="..\AirCOM.Client.B\AirCOM.Client.B.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>AirCOM.Server</RootNamespace>
+    <AssemblyName>AirCOM.Server</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AirCOM.Core\AirCOM.Core.csproj" />
+  </ItemGroup>
+
+</Project>

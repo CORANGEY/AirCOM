@@ -1,0 +1,17 @@
+<Project>
+
+  <PropertyGroup>
+    <SystemIOPortsVersion>8.0.0</SystemIOPortsVersion>
+    <SystemIOPipelinesVersion>8.0.0</SystemIOPipelinesVersion>
+    <SystemServiceProcessVersion>8.0.0</SystemServiceProcessVersion>
+    <CommunityToolkitMvvmVersion>8.2.2</CommunityToolkitMvvmVersion>
+    <HNotifyIconVersion>2.1.0</HNotifyIconVersion>
+    <HostingVersion>8.0.0</HostingVersion>
+    <LoggingAbstractionsVersion>8.0.1</LoggingAbstractionsVersion>
+    <XunitVersion>2.9.0</XunitVersion>
+    <XunitRunnerVersion>2.5.8</XunitRunnerVersion>
+    <FluentAssertionsVersion>6.12.0</FluentAssertionsVersion>
+    <MoqVersion>4.20.70</MoqVersion>
+  </PropertyGroup>
+
+</Project>

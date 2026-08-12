@@ -1,0 +1,21 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <ManageVersionsViaCentralPackageManagement Condition="'$(IsPackable)' != 'false'">true</ManageVersionsViaCentralPackageManagement>
+
+    <!-- 全局版本号：所有项目共用。每次发版在此递增。
+         规则：主.次.修订 (Semantic Versioning)
+         - 主版本：架构性大变化 (M0/M1/M2.. 里程碑完成)
+         - 次版本：新功能 / 里程碑内的重要更新
+         - 修订：bug 修复 / 小调整 -->
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
+    <FileVersion>$(VersionPrefix).0</FileVersion>
+  </PropertyGroup>
+
+</Project>

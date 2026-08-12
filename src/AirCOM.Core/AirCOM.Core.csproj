@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>AirCOM.Core</RootNamespace>
+    <AssemblyName>AirCOM.Core</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IO.Ports" Version="$(SystemIOPortsVersion)" />
+    <PackageReference Include="System.IO.Pipelines" Version="$(SystemIOPipelinesVersion)" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="$(LoggingAbstractionsVersion)" />
+  </ItemGroup>
+
+</Project>

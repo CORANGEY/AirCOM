@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>AirCOM.LoopbackTest</RootNamespace>
+    <AssemblyName>AirCOM.LoopbackTest</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IO.Ports" Version="$(SystemIOPortsVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AirCOM.Core\AirCOM.Core.csproj" />
+    <ProjectReference Include="..\..\src\AirCOM.Client.A\AirCOM.Client.A.csproj" />
+  </ItemGroup>
+
+</Project>

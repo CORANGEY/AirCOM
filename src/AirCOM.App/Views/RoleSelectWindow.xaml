@@ -1,0 +1,52 @@
+<Window x:Class="AirCOM.App.Views.RoleSelectWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="AirCOM - 选择角色" Height="420" Width="560"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
+        Loaded="OnLoaded">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="AirCOM" FontSize="28" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+        <TextBlock Grid.Row="1" HorizontalAlignment="Center" Margin="0,0,0,24">
+            <Run Text="请选择本机的角色   " FontSize="14" Foreground="Gray"/>
+            <Run Text="v" FontSize="11" Foreground="LightGray"/><Run x:Name="VersionRun" FontSize="11" Foreground="LightGray"/>
+        </TextBlock>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- A 端卡片 -->
+            <Border Grid.Column="0" BorderBrush="#3B82F6" BorderThickness="2" CornerRadius="8" Padding="16" Background="#F0F7FF">
+                <StackPanel>
+                    <TextBlock Text="A 端" FontSize="22" FontWeight="Bold" Foreground="#3B82F6" HorizontalAlignment="Center"/>
+                    <TextBlock Text="使用远程串口" FontSize="14" HorizontalAlignment="Center" Margin="0,4,0,12"/>
+                    <TextBlock Text="本机没有物理串口设备，通过 AirCOM 使用另一台电脑上共享的串口。需要已安装 com0com 虚拟驱动。"
+                               TextWrapping="Wrap" FontSize="11" Foreground="#555" Margin="0,0,0,16"/>
+                    <Button Content="作为 A 端运行" Padding="0,8" Background="#3B82F6" Foreground="White" FontWeight="Bold"
+                            Click="OnSelectA"/>
+                </StackPanel>
+            </Border>
+
+            <!-- B 端卡片 -->
+            <Border Grid.Column="2" BorderBrush="#10B981" BorderThickness="2" CornerRadius="8" Padding="16" Background="#F0FDF4">
+                <StackPanel>
+                    <TextBlock Text="B 端" FontSize="22" FontWeight="Bold" Foreground="#10B981" HorizontalAlignment="Center"/>
+                    <TextBlock Text="共享本地串口" FontSize="14" HorizontalAlignment="Center" Margin="0,4,0,12"/>
+                    <TextBlock Text="本机接了物理串口设备（如 USB-TTL），把它共享给另一台电脑使用。无需 com0com，纯绿色。"
+                               TextWrapping="Wrap" FontSize="11" Foreground="#555" Margin="0,0,0,16"/>
+                    <Button Content="作为 B 端运行" Padding="0,8" Background="#10B981" Foreground="White" FontWeight="Bold"
+                            Click="OnSelectB"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

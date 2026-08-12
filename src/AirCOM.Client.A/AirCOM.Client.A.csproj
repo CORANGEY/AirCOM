@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>AirCOM.Client.A</RootNamespace>
+    <AssemblyName>AirCOM.Client.A</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="$(CommunityToolkitMvvmVersion)" />
+    <PackageReference Include="H.NotifyIcon.Wpf" Version="$(HNotifyIconVersion)" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="$(HostingVersion)" />
+    <PackageReference Include="System.IO.Ports" Version="$(SystemIOPortsVersion)" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="$(SystemServiceProcessVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AirCOM.Core\AirCOM.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="com0com-repair.ps1">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

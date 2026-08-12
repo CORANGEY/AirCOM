@@ -1,0 +1,35 @@
+# Build 产物
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
+
+# 发布产物（按版本归档在 publish/v* 下，不纳入版本控制）
+publish/
+!publish/.gitkeep
+
+# IDE / 临时
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userprefs
+*.swp
+
+# 日志 / 运行时生成
+*.log
+aircom-settings.json
+com0com-repair-result.txt
+_setupc_tmp.txt
+diagnosis.txt
+fix-result.txt
+*-result.txt
+setupc-list.txt
+setupc-install-*.txt
+
+# 测试
+[Tt]est[Rr]esult*/
+
+# 用户测试工具（非项目代码，放在这里方便调试，但不纳入版本控制）
+串口助手/
