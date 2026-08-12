@@ -4,14 +4,18 @@ using System.Text.Json;
 namespace AirCOM.App.Services;
 
 /// <summary>
-/// Persistent settings for the AirCOM app, stored as JSON next to the exe.
-/// Holds the assigned com0com port pair so the user's serial app can keep
-/// opening the same COM number across runs.
+/// Persistent settings for the AirCOM app, stored as JSON in the user's
+/// <c>%AppData%\AirCOM</c> directory. This is shared across all versions
+/// (so the assigned com0com port pair stays stable regardless of which
+/// extracted folder the exe is launched from).
 /// </summary>
 public sealed class AppSettings
 {
-    private static readonly string SettingsPath = Path.Combine(
-        AppContext.BaseDirectory, "aircom-settings.json");
+    private static readonly string SettingsDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "AirCOM");
+
+    private static readonly string SettingsPath = Path.Combine(SettingsDir, "aircom-settings.json");
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -49,7 +53,14 @@ public sealed class AppSettings
 
     public void Save()
     {
-        try { File.WriteAllText(SettingsPath, JsonSerializer.Serialize(this, JsonOpts)); }
+        try
+        {
+            Directory.CreateDirectory(SettingsDir);
+            File.WriteAllText(SettingsPath, JsonSerializer.Serialize(this, JsonOpts));
+        }
         catch { }
     }
+
+    /// <summary>Path to the settings file (for diagnostics / reset).</summary>
+    public static string GetSettingsPath() => SettingsPath;
 }
