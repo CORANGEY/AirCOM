@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using AirCOM.Core.Util;
 using Microsoft.Extensions.Logging;
 
 namespace AirCOM.Core.Transport;
@@ -92,7 +93,9 @@ public sealed class TcpTransport : ITransport
     {
         if (_stream is null)
             throw new InvalidOperationException("Not connected.");
-        return await _stream.ReadAsync(buffer, ct).ConfigureAwait(false);
+        int read = await _stream.ReadAsync(buffer, ct).ConfigureAwait(false);
+        if (read == 0) DiagLog.Log("TcpTransport.ReadAsync returned 0 (EOF / FIN received)");
+        return read;
     }
 
     public async ValueTask WriteAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default)

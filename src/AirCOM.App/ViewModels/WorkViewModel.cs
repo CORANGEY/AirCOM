@@ -269,13 +269,25 @@ public partial class WorkViewModel : ObservableObject, IDisposable
         // owns the UI reset - skip here to avoid re-entry and Dispatcher deadlock.
         if (_disposing) return;
 
-        // Runs on a background thread -> dispatch to UI thread. Use BeginInvoke
-        // (non-blocking) so we never deadlock with a disposing UI thread.
+        // B-side is a LISTENER: one A-client disconnecting does NOT mean the B-side
+        // should stop. The BEngineHost AcceptLoop will go back to waiting for the next
+        // connection. We only log and flip the connection-state flag, not touch the host.
+        if (IsBSide)
+        {
+            _window.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                AppendLog($"A 端已断开（继续监听，等待重连）{(ex is null ? "" : "：" + ex.Message)}");
+                StatusText = $"监听中（等待 A 端连接），共享 {SelectedPort}";
+            }));
+            return;
+        }
+
+        // A-side: the connection IS the host lifecycle. Dispose and reset to allow
+        // reconnect. Runs on a background thread -> dispatch to UI thread.
         _window.Dispatcher.BeginInvoke(new Action(async () =>
         {
             AppendLog($"桥接停止：{(ex is null ? "正常" : ex.Message)}");
             if (_aHost is not null) { try { await _aHost.DisposeAsync(); } catch { } _aHost = null; }
-            if (_bHost is not null) { try { await _bHost.DisposeAsync(); } catch { } _bHost = null; }
             IsRunning = false;
             StatusText = "已断开（可重新连接）";
         }));
@@ -285,10 +297,25 @@ public partial class WorkViewModel : ObservableObject, IDisposable
     {
         _window.Dispatcher.BeginInvoke(new Action(() =>
         {
-            AppendLog(connected ? "对端已连接" : "对端已断开");
-            if (!connected && IsRunning)
+            if (connected)
             {
-                StatusText = "对端已断开（正在停止...）";
+                AppendLog("对端已连接");
+                StatusText = IsBSide
+                    ? $"监听中（A 端已连接），共享 {SelectedPort}"
+                    : $"已连接 {RemoteHost}:{RemotePort}";
+            }
+            else
+            {
+                AppendLog("对端已断开");
+                if (IsBSide)
+                {
+                    // B-side stays listening; don't say "stopping".
+                    StatusText = $"监听中（等待 A 端连接），共享 {SelectedPort}";
+                }
+                else if (IsRunning)
+                {
+                    StatusText = "对端已断开（正在停止...）";
+                }
             }
         }));
     }

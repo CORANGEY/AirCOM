@@ -80,30 +80,30 @@ public sealed class SerialBridge
         {
             // When either pump finishes (EOF/error), cancel the other and wait for both.
             var first = await Task.WhenAny(tasks).ConfigureAwait(false);
+            AirCOM.Core.Util.DiagLog.Log($"SerialBridge.RunAsync: first pump completed ({(first == tasks[0] ? "serial->net" : "net->serial")})");
             cts.Cancel();
 
+            // Observe the first pump's result (surfaces errors, but EOF is normal).
+            Exception? firstError = null;
             try { await first.ConfigureAwait(false); }
             catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Bridge pump failed.");
-                Stopped?.Invoke(this, ex);
-                return;
-            }
+            catch (Exception ex) { firstError = ex; _logger?.LogError(ex, "Bridge pump failed."); }
 
-            // Await the remaining pump.
-            foreach (var t in tasks.Where(t => t != first))
-            {
-                try { await t.ConfigureAwait(false); }
-                catch { /* swallow secondary pump cleanup errors */ }
-            }
+            // IMPORTANT: do NOT await the other pump here. SerialPort.BaseStream on a
+            // com0com virtual port does NOT honor CancellationToken when blocked waiting
+            // for data with no input, so awaiting it would block forever -> Stopped never
+            // fires -> peer-disconnect never detected. Fire-and-forget the remaining pump;
+            // its cleanup (serial close, transport close) is handled by DisposeAsync.
+            AirCOM.Core.Util.DiagLog.Log("SerialBridge.RunAsync: invoking Stopped (not waiting for other pump)");
+
+            Stopped?.Invoke(this, firstError);
+            AirCOM.Core.Util.DiagLog.Log($"SerialBridge.RunAsync: Stopped invoked (ex={firstError?.Message ?? "null"})");
+            return;
         }
         finally
         {
             cts.Dispose();
         }
-
-        Stopped?.Invoke(this, null);
     }
 
     /// <summary>Reads serial bytes and forwards them as DATA frames.</summary>
@@ -153,7 +153,11 @@ public sealed class SerialBridge
                 return;
             }
 
-            if (frame is null) return; // EOF
+            if (frame is null)
+            {
+                AirCOM.Core.Util.DiagLog.Log("SerialBridge.PumpNetworkToSerial: ReadFrameAsync returned null (EOF), returning");
+                return; // EOF
+            }
 
             _stats.FramesReceived++;
 

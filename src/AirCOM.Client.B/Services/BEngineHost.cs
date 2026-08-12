@@ -86,6 +86,7 @@ public sealed class BEngineHost : IAsyncDisposable
                 var transport = new TcpTransport(client, _loggerFactory?.CreateLogger<TcpTransport>());
                 _connection = new FramedConnection(transport, _loggerFactory?.CreateLogger<FramedConnection>());
                 _connection.StartReceivePump();
+                AirCOM.Core.Util.DiagLog.Log("BEngineHost: A-side connected, starting bridge");
 
                 _poller = new ControlLinePoller(_serial!, _connection, NextSequence,
                     _loggerFactory?.CreateLogger<ControlLinePoller>());
@@ -116,6 +117,7 @@ public sealed class BEngineHost : IAsyncDisposable
                 if (_connection is not null) await _connection.DisposeAsync();
                 _connection = null;
                 _bridge = null;
+                AirCOM.Core.Util.DiagLog.Log("BEngineHost: bridge stopped, going back to accept next A-side");
             }
         }
     }

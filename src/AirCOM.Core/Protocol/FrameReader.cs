@@ -33,7 +33,10 @@ public sealed class FrameReader : IAsyncDisposable
             var buffer = result.Buffer;
 
             if (buffer.IsEmpty && result.IsCompleted)
+            {
+                AirCOM.Core.Util.DiagLog.Log("FrameReader.ReadFrameAsync: buffer empty & IsCompleted, returning null");
                 return null;
+            }
 
             // Try to decode a frame from the front of the buffer.
             if (TryReadFrame(ref buffer, out var frame))

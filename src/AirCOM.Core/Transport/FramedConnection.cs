@@ -69,27 +69,30 @@ public sealed class FramedConnection : IAsyncDisposable
     private async Task ReceivePumpAsync(CancellationToken ct)
     {
         var writer = _receivePipe.Writer;
+        AirCOM.Core.Util.DiagLog.Log("FramedConnection.ReceivePump: started");
         try
         {
             while (!ct.IsCancellationRequested)
             {
                 var buffer = writer.GetMemory(4096);
                 int read = await _transport.ReadAsync(buffer, ct).ConfigureAwait(false);
-                if (read == 0) break; // EOF
+                if (read == 0) { AirCOM.Core.Util.DiagLog.Log("FramedConnection.ReceivePump: EOF, completing writer"); break; }
 
                 writer.Advance(read);
                 var flushResult = await writer.FlushAsync(ct).ConfigureAwait(false);
-                if (flushResult.IsCompleted) break;
+                if (flushResult.IsCompleted) { AirCOM.Core.Util.DiagLog.Log("FramedConnection.ReceivePump: flush IsCompleted, breaking"); break; }
             }
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException) { AirCOM.Core.Util.DiagLog.Log("FramedConnection.ReceivePump: cancelled"); }
         catch (Exception ex)
         {
+            AirCOM.Core.Util.DiagLog.Log($"FramedConnection.ReceivePump: exception {ex.GetType().Name}: {ex.Message}");
             _logger?.LogError(ex, "Receive pump error.");
         }
         finally
         {
             await writer.CompleteAsync().ConfigureAwait(false);
+            AirCOM.Core.Util.DiagLog.Log("FramedConnection.ReceivePump: writer completed, pump exiting");
         }
     }
 

@@ -72,6 +72,7 @@ public sealed class AEngineHost : IAsyncDisposable
         _bridge.StatsUpdated += (s, stats) => StatsUpdated?.Invoke(s, stats);
         _bridge.Stopped += (s, ex) =>
         {
+            AirCOM.Core.Util.DiagLog.Log($"AEngineHost: bridge Stopped event (ex={ex?.Message ?? "null"})");
             Stopped?.Invoke(s, ex);
             ConnectionStateChanged?.Invoke(this, false);
         };
