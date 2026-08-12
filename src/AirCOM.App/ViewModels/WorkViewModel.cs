@@ -250,7 +250,8 @@ public partial class WorkViewModel : ObservableObject, IDisposable
             if (MessageBox.Show("正在运行，确定返回角色选择？", "确认", MessageBoxButton.OKCancel) != MessageBoxResult.OK)
                 return;
             _disposing = true; // suppress OnStopped UI reset during dispose
-            await DisposeAsyncCore();
+            if (_aHost is not null) { try { await _aHost.DisposeAsync(); } catch { } _aHost = null; }
+            if (_bHost is not null) { try { await _bHost.DisposeAsync(); } catch { } _bHost = null; }
             IsRunning = false;
         }
         var roleWin = new Views.RoleSelectWindow { WindowStartupLocation = WindowStartupLocation.CenterScreen };
@@ -336,16 +337,16 @@ public partial class WorkViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
-        // Called from the window's Closing event (UI thread). Must NOT block the UI
-        // thread waiting on async dispose - that deadlocks because the bridge's
-        // Stopped event dispatches back to the UI thread. Fire-and-forget instead.
+        // Called from the window's Closing event (UI thread). We must fully close the
+        // TCP connection (send FIN) BEFORE the process exits, otherwise the peer won't
+        // detect the disconnect. This is safe to do synchronously because _disposing
+        // makes OnStopped a no-op (no Dispatcher re-entry -> no deadlock).
         _disposing = true;
-        _ = DisposeAsyncCore();
-    }
-
-    private async Task DisposeAsyncCore()
-    {
-        if (_aHost is not null) { try { await _aHost.DisposeAsync(); } catch { } _aHost = null; }
-        if (_bHost is not null) { try { await _bHost.DisposeAsync(); } catch { } _bHost = null; }
+        try
+        {
+            if (_aHost is not null) { _aHost.DisposeAsync().AsTask().GetAwaiter().GetResult(); _aHost = null; }
+            if (_bHost is not null) { _bHost.DisposeAsync().AsTask().GetAwaiter().GetResult(); _bHost = null; }
+        }
+        catch { }
     }
 }

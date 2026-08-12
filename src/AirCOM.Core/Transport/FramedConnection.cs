@@ -96,12 +96,17 @@ public sealed class FramedConnection : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _cts.Cancel();
+        // Stop the receive pump first so it's not reading while we close.
         try
         {
             if (_pumpTask is not null) await _pumpTask.ConfigureAwait(false);
         }
         catch { }
         await _frameReader.DisposeAsync().ConfigureAwait(false);
+        // Explicitly disconnect the underlying transport so the peer receives a TCP
+        // FIN promptly (otherwise the peer's read stays blocked until keep-alive).
+        try { await _transport.DisconnectAsync().ConfigureAwait(false); } catch { }
+        try { await _transport.DisposeAsync().ConfigureAwait(false); } catch { }
         _cts.Dispose();
     }
 }

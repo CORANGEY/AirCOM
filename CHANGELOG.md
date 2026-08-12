@@ -14,6 +14,21 @@
 
 ---
 
+## v0.1.8 - 2026-08-12
+
+修复对端正常关闭后本端仍检测不到断开的问题。
+
+### 修复
+
+- **FramedConnection.DisposeAsync 显式断开 transport**：之前只取消 pump/reader，没关底层 TCP，依赖进程退出时 OS 回收 socket（不一定优雅发 FIN）。现在显式调 `DisconnectAsync` + `DisposeAsync`，确保 FIN 发出。
+- **窗口关闭时同步等 Dispose 完成**：之前 fire-and-forget 导致进程退出时 Dispose 可能没跑完，socket 被强制回收。改回同步等待（`_disposing` 标志让 OnStopped 短路，不 Dispatcher 重入，所以不会死锁）。
+
+### 影响
+
+- B 端关闭程序/停止后，A 端秒级检测到断开并显示"已断开（可重新连接）"。
+
+---
+
 ## v0.1.7 - 2026-08-12
 
 修复连接状态下关闭程序卡死、对端停止后本端检测不到的问题。
