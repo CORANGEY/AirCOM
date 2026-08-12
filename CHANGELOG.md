@@ -14,6 +14,23 @@
 
 ---
 
+## v0.1.7 - 2026-08-12
+
+修复连接状态下关闭程序卡死、对端停止后本端检测不到的问题。
+
+### 修复
+
+- **修复 UI 线程死锁**：v0.1.6 在窗口关闭/返回角色时用 `.GetAwaiter().GetResult()` 在 UI 线程同步等异步 Dispose，而死锁了。改为全异步（fire-and-forget Dispose，Back 命令改 async），并加 `_disposing` 标志防止 `OnStopped` 在主动关闭时重入。
+- **修复 catch 块里的同步等**：StartASide/StartBSide 失败后的 Dispose 也改为 await。
+- 确保 B 端停止/关闭时正常 Dispose -> TCP 发 FIN -> A 端秒级检测到断开（不再依赖 25 秒 keep-alive）。
+
+### 影响
+
+- 连接状态下关闭程序不再卡死。
+- B 端停止后，A 端几秒内检测到并显示"已断开（可重新连接）"。
+
+---
+
 ## v0.1.6 - 2026-08-12
 
 修复"对端关闭后本端仍显示已连接"的 bug。

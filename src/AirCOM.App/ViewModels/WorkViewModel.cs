@@ -25,6 +25,7 @@ public partial class WorkViewModel : ObservableObject, IDisposable
     private readonly Window _window;
     private AEngineHost? _aHost;
     private BEngineHost? _bHost;
+    private bool _disposing; // true while the window is closing; OnStopped skips UI reset
 
     public WorkViewModel(AppRole role, Window window)
     {
@@ -197,8 +198,7 @@ public partial class WorkViewModel : ObservableObject, IDisposable
             string msg = FriendlyError(ex, RemoteHost, RemotePort);
             AppendLog($"连接失败：{msg}");
             Com0comStatus = $"失败：{msg}";
-            _aHost?.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            _aHost = null;
+            if (_aHost is not null) { try { await _aHost.DisposeAsync(); } catch { } _aHost = null; }
         }
     }
 
@@ -227,28 +227,31 @@ public partial class WorkViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             AppendLog($"启动失败：{FriendlyError(ex, SelectedPort, ListenPort)}");
-            _bHost?.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            _bHost = null;
+            if (_bHost is not null) { try { await _bHost.DisposeAsync(); } catch { } _bHost = null; }
         }
     }
 
     private async Task StopInternalAsync()
     {
-        if (_aHost is not null) { await _aHost.DisposeAsync(); _aHost = null; }
-        if (_bHost is not null) { await _bHost.DisposeAsync(); _bHost = null; }
+        _disposing = true; // suppress OnStopped re-entry while we dispose
+        if (_aHost is not null) { try { await _aHost.DisposeAsync(); } catch { } _aHost = null; }
+        if (_bHost is not null) { try { await _bHost.DisposeAsync(); } catch { } _bHost = null; }
+        _disposing = false;
         IsRunning = false;
         StatusText = "已停止";
         AppendLog("已停止");
     }
 
     [RelayCommand]
-    private void Back()
+    private async Task Back()
     {
         if (IsRunning)
         {
             if (MessageBox.Show("正在运行，确定返回角色选择？", "确认", MessageBoxButton.OKCancel) != MessageBoxResult.OK)
                 return;
-            StopInternalAsync().GetAwaiter().GetResult();
+            _disposing = true; // suppress OnStopped UI reset during dispose
+            await DisposeAsyncCore();
+            IsRunning = false;
         }
         var roleWin = new Views.RoleSelectWindow { WindowStartupLocation = WindowStartupLocation.CenterScreen };
         roleWin.Show();
@@ -260,13 +263,18 @@ public partial class WorkViewModel : ObservableObject, IDisposable
 
     private void OnStopped(object? s, Exception? ex)
     {
-        // Bridge stopped (peer disconnected or error). Reset UI to allow reconnect.
-        // Runs on a background thread -> dispatch to UI thread.
-        _window.Dispatcher.BeginInvoke(new Action(() =>
+        // Bridge stopped (peer disconnected, or our own dispose). If we're already
+        // disposing (user clicked stop / closed window), StopInternalAsync/Dispose
+        // owns the UI reset - skip here to avoid re-entry and Dispatcher deadlock.
+        if (_disposing) return;
+
+        // Runs on a background thread -> dispatch to UI thread. Use BeginInvoke
+        // (non-blocking) so we never deadlock with a disposing UI thread.
+        _window.Dispatcher.BeginInvoke(new Action(async () =>
         {
             AppendLog($"桥接停止：{(ex is null ? "正常" : ex.Message)}");
-            if (_aHost is not null) { try { _aHost.DisposeAsync().AsTask().GetAwaiter().GetResult(); } catch { } _aHost = null; }
-            if (_bHost is not null) { try { _bHost.DisposeAsync().AsTask().GetAwaiter().GetResult(); } catch { } _bHost = null; }
+            if (_aHost is not null) { try { await _aHost.DisposeAsync(); } catch { } _aHost = null; }
+            if (_bHost is not null) { try { await _bHost.DisposeAsync(); } catch { } _bHost = null; }
             IsRunning = false;
             StatusText = "已断开（可重新连接）";
         }));
@@ -328,7 +336,16 @@ public partial class WorkViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
-        _aHost?.DisposeAsync().AsTask().GetAwaiter().GetResult();
-        _bHost?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        // Called from the window's Closing event (UI thread). Must NOT block the UI
+        // thread waiting on async dispose - that deadlocks because the bridge's
+        // Stopped event dispatches back to the UI thread. Fire-and-forget instead.
+        _disposing = true;
+        _ = DisposeAsyncCore();
+    }
+
+    private async Task DisposeAsyncCore()
+    {
+        if (_aHost is not null) { try { await _aHost.DisposeAsync(); } catch { } _aHost = null; }
+        if (_bHost is not null) { try { await _bHost.DisposeAsync(); } catch { } _bHost = null; }
     }
 }
