@@ -32,12 +32,16 @@ function Log($msg) {
     Write-Host $msg
     $msg | Out-File -FilePath $OutFile -Encoding utf8 -Append
 }
-function Run-Setupc([string[]]$args, [int]$timeoutMs = 20000) {
+function Run-Setupc([string[]]$SetupArgs, [int]$timeoutMs = 20000) {
     if (-not (Test-Path $Setupc)) { Log "  setupc.exe 不存在: $Setupc"; return "" }
-    $tmp = Join-Path $PSScriptRoot "_setupc_tmp.txt"
-    $proc = Start-Process -FilePath $Setupc -ArgumentList $args -NoNewWindow -PassThru -WorkingDirectory $DriverDir -RedirectStandardOutput $tmp -RedirectStandardError $tmp
+    if ($null -eq $SetupArgs -or $SetupArgs.Count -eq 0) { return "" }
+    $tmpOut = Join-Path $PSScriptRoot "_setupc_out.txt"
+    $tmpErr = Join-Path $PSScriptRoot "_setupc_err.txt"
+    $proc = Start-Process -FilePath $Setupc -ArgumentList $SetupArgs -NoNewWindow -PassThru -WorkingDirectory $DriverDir -RedirectStandardOutput $tmpOut -RedirectStandardError $tmpErr
     if (-not $proc.WaitForExit($timeoutMs)) { Log "  [超时，强制结束]"; try { $proc.Kill() } catch { } }
-    $r = ""; if (Test-Path $tmp) { $r = Get-Content $tmp -Raw -ErrorAction SilentlyContinue }
+    $r = ""
+    if (Test-Path $tmpOut) { $r = Get-Content $tmpOut -Raw -ErrorAction SilentlyContinue }
+    if (Test-Path $tmpErr) { $errContent = Get-Content $tmpErr -Raw -ErrorAction SilentlyContinue; if ($errContent) { $r += "`n[stderr] $errContent" } }
     return $r
 }
 
