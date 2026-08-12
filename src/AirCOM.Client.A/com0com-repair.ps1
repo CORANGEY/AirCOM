@@ -1,13 +1,13 @@
 ﻿# AirCOM - com0com 修复脚本（A 端首次使用或驱动异常时由程序自动提权调用）
 # 用法（一般由程序调用，也可手动以管理员身份运行）：
-#   powershell -ExecutionPolicy Bypass -File com0com-repair.ps1 -PortA COM10 -PortB COM11
+#   powershell -ExecutionPolicy Bypass -File com0com-repair.ps1 -PortA COM50 -PortB COM51
 #
 # 做的事：
-#   1. 确保 com0com 驱动已安装并运行（必要时 pnputil + sc create + 启动）
-#   2. 确保虚拟口对 -PortA/-PortB 存在（setupc install）
-#   3. 配置 EmuBR/EmuOverrun
-#   4. 检查测试签名模式（未开启则开启并提示重启）
-# 结果写入 com0com-repair-result.txt
+#   1. 验证驱动签名状态（随包驱动带 COMODO 商业签名，无需测试签名）
+#   2. 确保 com0com 驱动已安装并运行（必要时跑安装包 + pnputil + sc create，服务设自动）
+#   3. 确保虚拟口对 -PortA/-PortB 存在（setupc install）
+#   4. 配置 EmuBR/EmuOverrun
+# 装完即用，无需重启。结果写入 com0com-repair-result.txt
 
 #Requires -RunAsAdministrator
 
@@ -47,14 +47,16 @@ function Run-Setupc([string[]]$SetupArgs, [int]$timeoutMs = 20000) {
 
 $NeedReboot = $false
 
-# 1. 测试签名
-Log "--- 1. 测试签名模式 ---"
-$ts = bcdedit /enum "{current}" 2>&1 | Select-String -Pattern "testsigning" -SimpleMatch
-if ($ts -and $ts.ToString() -match "Yes") { Log "  已开启" }
-else {
-    Log "  未开启，执行 bcdedit /set testsigning on"
-    bcdedit /set testsigning on | Out-Null
-    $NeedReboot = $true
+# 1. 驱动签名验证（仅信息性，不强制开测试签名）
+#    说明：随包的 com0com 安装包带 COMODO 商业代码签名（签名方 CyberCircuits），
+#    64 位 Win10/11 可直接加载，无需测试签名模式，无需重启。
+Log "--- 1. 驱动签名检查 ---"
+$sysFile = Join-Path $env:WINDIR "System32\drivers\com0com.sys"
+if (Test-Path $sysFile) {
+    $sig = Get-AuthenticodeSignature $sysFile
+    Log "  com0com.sys 签名状态: $($sig.Status)"
+} else {
+    Log "  com0com.sys 尚未安装，将在第 2 步安装"
 }
 "" | Out-File -FilePath $OutFile -Encoding utf8 -Append
 
@@ -86,11 +88,20 @@ if (-not $svc) {
         $sysSrc = Join-Path $DriverDir "com0com.sys"
         $sysDst = Join-Path $env:WINDIR "System32\drivers\com0com.sys"
         if ((Test-Path $sysSrc) -and -not (Test-Path $sysDst)) { Copy-Item $sysSrc $sysDst -Force }
-        & sc.exe create com0com type= kernel binPath= "System32\drivers\com0com.sys" start= demand 2>&1 | Out-String | ForEach-Object { Log $_ }
+        # start= auto 让服务开机自动启动，避免口对偶发消失
+        & sc.exe create com0com type= kernel binPath= "System32\drivers\com0com.sys" start= auto 2>&1 | Out-String | ForEach-Object { Log $_ }
     } else { Log "  找不到 inf，安装失败" }
     $svc = Get-Service com0com -ErrorAction SilentlyContinue
 }
 if ($svc) {
+    # 确保启动类型是 Automatic（之前版本可能是 Manual / Demand）
+    try {
+        $svcKey = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\com0com' -ErrorAction Stop
+        if ($svcKey.Start -ne 2) {  # 2 = SERVICE_AUTO_START
+            Log "  把启动类型改为自动（当前值: $($svcKey.Start)）"
+            Set-Service com0com -StartupType Automatic
+        }
+    } catch { }
     Log "  服务状态: $($svc.Status)"
     if ($svc.Status -ne "Running") { Start-Service com0com -ErrorAction SilentlyContinue; Start-Sleep 1; Log "  启动后: $((Get-Service com0com).Status)" }
 } else { Log "  服务仍不存在，修复失败" }
@@ -125,18 +136,8 @@ Log "系统 COM 口: $($ports -join ', ')"
 
 "" | Out-File -FilePath $OutFile -Encoding utf8 -Append
 Log "=== 修复完成 ==="
-if ($NeedReboot) {
-    Log ">>> 必须重启电脑，测试签名和驱动才会生效 <<<"
-    Log "重启后再次运行 AirCOM 即可正常使用。"
-} else {
-    Log "驱动已就绪，无需重启。"
-}
+Log "驱动已就绪，无需重启。"
 Log "结果已写入: $OutFile"
 
-if ($NeedReboot) {
-    Add-Type -AssemblyName PresentationFramework
-    [System.Windows.MessageBox]::Show("com0com 已配置，但需要重启电脑让测试签名生效。重启后再次运行 AirCOM 即可。", "AirCOM - 需要重启", "OK", "Warning") | Out-Null
-} else {
-    Add-Type -AssemblyName PresentationFramework
-    [System.Windows.MessageBox]::Show("com0com 驱动已就绪，$PortA <-> $PortB 口对已创建。", "AirCOM - 修复完成", "OK", "Information") | Out-Null
-}
+Add-Type -AssemblyName PresentationFramework
+[System.Windows.MessageBox]::Show("com0com 驱动已就绪，$PortA <-> $PortB 口对已创建。可直接使用，无需重启。", "AirCOM - 修复完成", "OK", "Information") | Out-Null

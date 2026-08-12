@@ -140,7 +140,7 @@ public partial class WorkViewModel : ObservableObject, IDisposable
                 _ => "",
             };
             if (MessageBox.Show(
-                $"{hint}\n\n即将以管理员权限运行修复脚本（会弹 UAC 提示）。\n如果是首次使用，修复后需要重启电脑让测试签名生效。\n\n继续吗？",
+                $"{hint}\n\n即将以管理员权限运行修复脚本（会弹 UAC 提示）。\n随包的 com0com 驱动带商业签名，装完即可用，无需重启。\n\n继续吗？",
                 "AirCOM - 需要修复 com0com", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
             {
                 AppendLog("用户取消修复");
@@ -162,7 +162,7 @@ public partial class WorkViewModel : ObservableObject, IDisposable
             state = mgr.CheckState(userPort, servicePort);
             if (state != AirCOM.Client.A.Com0com.Com0comState.Ready)
             {
-                AppendLog($"修复后仍未就绪（{state}）。如果刚开了测试签名，请重启电脑后再试。");
+                AppendLog($"修复后仍未就绪（{state}）。请检查 com0com 是否安装成功。");
                 Com0comStatus = $"修复后：{state}（可能需重启）";
                 return;
             }
