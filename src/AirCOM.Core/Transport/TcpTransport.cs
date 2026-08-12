@@ -33,6 +33,15 @@ public sealed class TcpTransport : ITransport
         _logger = logger;
         _client = acceptedClient;
         _stream = acceptedClient.GetStream();
+        // Enable keep-alive on accepted connections too (detect dead peers).
+        try
+        {
+            acceptedClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+            acceptedClient.Client.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 10);
+            acceptedClient.Client.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 3);
+            acceptedClient.Client.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 5);
+        }
+        catch { /* keep-alive is best-effort */ }
         SetState(ConnectionState.Connected);
     }
 
@@ -61,6 +70,13 @@ public sealed class TcpTransport : ITransport
                     break;
             }
             _stream = _client.GetStream();
+            // Enable TCP keep-alive so dead peers (crash / cable pull / no FIN) are
+            // detected and ReadAsync returns EOF instead of blocking forever.
+            _client.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+            // Start probing after 10s idle, every 3s, 5 failed probes = dead (~25s total).
+            _client.Client.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 10);
+            _client.Client.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 3);
+            _client.Client.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 5);
             SetState(ConnectionState.Connected);
         }
         catch
