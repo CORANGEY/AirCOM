@@ -40,4 +40,10 @@ public enum FrameType : byte
 
     /// <summary>Parameter-application confirmation.</summary>
     SetParamsAck = 0x0C,
+
+    /// <summary>Server control: pairing matched (M2). Client-facing signaling only.</summary>
+    Matched = 0x0D,
+
+    /// <summary>Server control: signaling error (bad code, timeout, session lost).</summary>
+    SignalingError = 0x0E,
 }

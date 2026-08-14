@@ -41,6 +41,8 @@ public static class MessageCodec
         FrameType.Ack => AckMessage.Decode(payload),
         FrameType.Break => BreakMessage.Decode(payload),
         FrameType.SetParamsAck => SetParamsAckMessage.Decode(payload),
+        FrameType.Matched => MatchedMessage.Decode(payload),
+        FrameType.SignalingError => SignalingErrorMessage.Decode(payload),
         _ => null,
     };
 }
