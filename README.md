@@ -152,6 +152,8 @@ AirCOM/
 
 ## 许可
 
+Copyright (C) 2026 CORANGEY
+
 本项目自身代码以 [GPL-2.0-or-later](LICENSE) 发布（与 com0com 一致）。
 
 发布包中捆绑分发的第三方组件：
