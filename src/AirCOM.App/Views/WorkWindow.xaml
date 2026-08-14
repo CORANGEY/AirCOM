@@ -69,8 +69,16 @@
         </GroupBox>
 
         <StackPanel Orientation="Horizontal" Grid.Row="2" Margin="0,0,0,8">
-            <TextBlock Text="波特率:" VerticalAlignment="Center" Margin="0,0,6,0"/>
-            <TextBox Text="{Binding BaudRate}" MinWidth="80" VerticalAlignment="Center"/>
+            <!-- B 端：波特率可设（决定真实串口参数，唯一有效处） -->
+            <TextBlock Text="波特率:" VerticalAlignment="Center" Margin="0,0,6,0"
+                       Visibility="{Binding IsBSide, Converter={StaticResource BoolToVis}}"/>
+            <TextBox Text="{Binding BaudRate}" MinWidth="80" VerticalAlignment="Center"
+                     Visibility="{Binding IsBSide, Converter={StaticResource BoolToVis}}"/>
+            <!-- A 端：波特率只读，跟随 B 端 -->
+            <TextBlock Text="波特率:" VerticalAlignment="Center" Margin="0,0,6,0"
+                       Visibility="{Binding IsASide, Converter={StaticResource BoolToVis}}"/>
+            <TextBox Text="{Binding BaudRateDisplay}" MinWidth="120" VerticalAlignment="Center" IsReadOnly="True" Background="#F4F4F4"
+                     Visibility="{Binding IsASide, Converter={StaticResource BoolToVis}}"/>
             <Button Content="{Binding ActionButtonLabel}" Command="{Binding ActionCommand}" Margin="12,0,0,0" Padding="24,6" FontWeight="Bold"
                     Background="{Binding ActionButtonColor}" Foreground="White"/>
             <TextBlock Text="{Binding Com0comStatus}" VerticalAlignment="Center" Margin="16,0,0,0" Foreground="OrangeRed" TextWrapping="Wrap"

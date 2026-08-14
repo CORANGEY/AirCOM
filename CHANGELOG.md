@@ -14,6 +14,23 @@
 
 ---
 
+## v0.1.21 - 2026-08-12
+
+真机稳定性与 Modbus 兼容性修复（合并 v0.1.13~v0.1.21 验证版）。
+
+### 修复
+
+- **真实串口秒断（根因）**：`SerialPort.BaseStream.ReadAsync` 在真实串口上内部依赖的后台 I/O 线程间歇性退出，抛 `IOException: I/O operation has been aborted because of a thread exit`（端口本身正常），导致 bridge 秒停、连接秒断。虚拟口（com0com）不触发，真实 USB-TTL 必现。修复：`RealSerialPort` 改用同步 `SerialPort.Read/Write`（跑线程池、200ms 读超时），完全绕开 BaseStream 异步机制。
+- **Modbus 帧拆包（40ms 间隔）**：串口驱动逐字节到达触发多次读取，一帧 8 字节被拆成 `01` + 后 7 字节两个包（间隔 ~40ms），Modbus 依赖帧间隔分帧因此解析失败。修复：`SerialBridge` 读到首批数据后做突发合并（约 10ms 聚合窗口，`BytesToRead` 轮询），一次突发合成一个网络帧。
+- **B 端 SetParams 重复重置串口**：A 端每次连接发 SET_PARAMS，即使参数相同也会重置串口句柄（中断在读）。加"参数相同跳过"保护。
+
+### 改进
+
+- **波特率职责简化**：只有 B 端波特率有效（真实串口参数）。A 端波特率输入框移除，改为只读"跟随 B 端：N"——连接后 B 端上报参数，A 端应用（EmuBR 同步）并显示。
+- **B 端串口下拉框显示设备名**（如 `COM4 - USB-SERIAL CH340`，来自 WMI），查不到时降级为端口号。
+
+---
+
 ## v0.1.12 - 2026-08-12
 
 修复断开检测的根因和 B 端监听生命周期问题（合并 v0.1.9~v0.1.11 诊断版本的修复）。

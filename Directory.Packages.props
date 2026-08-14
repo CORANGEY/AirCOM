@@ -3,6 +3,7 @@
   <PropertyGroup>
     <SystemIOPortsVersion>8.0.0</SystemIOPortsVersion>
     <SystemIOPipelinesVersion>8.0.0</SystemIOPipelinesVersion>
+    <SystemManagementVersion>8.0.0</SystemManagementVersion>
     <SystemServiceProcessVersion>8.0.0</SystemServiceProcessVersion>
     <CommunityToolkitMvvmVersion>8.2.2</CommunityToolkitMvvmVersion>
     <HNotifyIconVersion>2.1.0</HNotifyIconVersion>

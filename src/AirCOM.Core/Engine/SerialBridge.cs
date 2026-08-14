@@ -121,18 +121,41 @@ public sealed class SerialBridge
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Serial read error.");
+                AirCOM.Core.Util.DiagLog.Log($"PumpSerialToNetwork: read exception {ex.GetType().Name}: {ex.Message}");
                 return;
             }
 
-            if (read == 0) continue; // com0com: 0 typically means timeout, not EOF
+            if (read == 0) continue; // no data (timeout), loop and wait
 
-            var payload = read == buffer.Length ? buffer : buffer.AsSpan(0, read).ToArray();
+            // Coalesce the rest of this burst. The OS may deliver one Modbus RTU frame
+            // (e.g. 8 bytes) as multiple reads (first byte then the rest) because serial
+            // events fire per-arrival. Without coalescing the frame splits into multiple
+            // network frames -> the peer's serial app sees two packets with a gap ->
+            // Modbus parsers that rely on inter-frame timing break.
+            //
+            // Give the rest of the burst a short window to arrive, then send whatever we
+            // have as one frame. We poll with BytesToRead and a brief settle delay.
+            int total = read;
+            int idle = 0;
+            while (total < buffer.Length && idle < 5)
+            {
+                if (_serial.BytesToRead > 0)
+                {
+                    int extra = await _serial.ReadAsync(buffer, total, buffer.Length - total, ct).ConfigureAwait(false);
+                    if (extra > 0) { total += extra; idle = 0; continue; }
+                }
+                // No data ready right now; wait a touch for the rest of the burst.
+                await Task.Delay(2, ct).ConfigureAwait(false);
+                idle++;
+            }
+
+            var payload = total == buffer.Length ? buffer : buffer.AsSpan(0, total).ToArray();
             uint seq = _nextSequence++;
             await _connection.SendFrameAsync(Frame.Data(payload, SessionId, seq), ct).ConfigureAwait(false);
 
-            _stats.BytesSerialToNet += read;
+            _stats.BytesSerialToNet += total;
             _stats.FramesSent++;
-            MaybeReportStats(read);
+            MaybeReportStats(total);
         }
     }
 
@@ -150,7 +173,8 @@ public sealed class SerialBridge
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Network read error.");
-                return;
+                AirCOM.Core.Util.DiagLog.Log($"PumpNetworkToSerial: read exception {ex.GetType().Name}: {ex.Message}");
+                throw;
             }
 
             if (frame is null)

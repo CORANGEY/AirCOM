@@ -16,6 +16,12 @@ public interface ISerialPort : IDisposable
     /// <summary>Port name, e.g. "COM3" or "COM11".</summary>
     string PortName { get; }
 
+    /// <summary>Number of bytes available to read right now (non-blocking). Used by the
+    /// bridge to coalesce a burst of serial bytes into one frame, so a single Modbus
+    /// RTU frame (which arrives as one burst) isn't split across multiple frames just
+    /// because the OS delivered it byte-by-byte.</summary>
+    int BytesToRead { get; }
+
     /// <summary>Opens the port with the given parameters.</summary>
     Task OpenAsync(SerialParams parameters, CancellationToken ct = default);
 

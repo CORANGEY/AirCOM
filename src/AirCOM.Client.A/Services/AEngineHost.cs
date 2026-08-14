@@ -77,12 +77,20 @@ public sealed class AEngineHost : IAsyncDisposable
             ConnectionStateChanged?.Invoke(this, false);
         };
 
-        // Push initial params to the B-side so the hardware matches the virtual port.
-        await SendSetParamsAsync(initialParams, ct);
+        // Don't push initial params to the B-side: the B-side owns the serial params
+        // (its UI is the only place the user sets the baud rate that matters - it's
+        // the real hardware port). Instead, the B-side sends us its current params
+        // right after accept; we apply them to the virtual port and display them.
 
         _poller.Start();
         _runTask = Task.Run(() => _bridge.RunAsync(_cts.Token), _cts.Token);
     }
+
+    /// <summary>Serial params last received from the B-side (the authoritative value).</summary>
+    public SerialParams? PeerParams { get; private set; }
+
+    /// <summary>Raised when the B-side reports its serial params.</summary>
+    public event EventHandler<SerialParams>? PeerParamsReceived;
 
     /// <summary>Sends a SET_PARAMS frame to the B-side when local params change.</summary>
     public async ValueTask SendSetParamsAsync(SerialParams parameters, CancellationToken ct = default)
@@ -94,13 +102,26 @@ public sealed class AEngineHost : IAsyncDisposable
                 1, NextSequence(), (ushort)payload.Length, FrameFlags.None), payload), ct);
     }
 
-    /// <summary>Handles LINE_STATE / SET_PARAMS_ACK from the B-side.</summary>
+    /// <summary>Handles LINE_STATE / SET_PARAMS / SET_PARAMS_ACK from the B-side.</summary>
     private async ValueTask<bool> HandleControlFrameAsync(Frame frame, CancellationToken ct)
     {
         switch (frame.Type)
         {
             case FrameType.LineState:
                 await _poller!.ApplyPeerLineStateAsync(frame, ct);
+                return true;
+            case FrameType.SetParams:
+                // B-side (owner of the real port) reports its params: apply to our
+                // virtual port (keeps EmuBR pacing in sync) and surface to the UI.
+                var sp = (SetParamsMessage)MessageCodec.Decode(frame)!;
+                PeerParams = sp.Params;
+                try { _serial?.SetParams(sp.Params); } catch { }
+                PeerParamsReceived?.Invoke(this, sp.Params);
+                // Ack back.
+                var ackPayload = new SetParamsAckMessage(ok: true).ToPayload();
+                await _connection!.SendFrameAsync(new Frame(
+                    new FrameHeader(FrameHeader.CurrentVersion, FrameType.SetParamsAck,
+                        1, NextSequence(), (ushort)ackPayload.Length, FrameFlags.None), ackPayload), ct);
                 return true;
             case FrameType.SetParamsAck:
                 var ack = (SetParamsAckMessage)MessageCodec.Decode(frame)!;

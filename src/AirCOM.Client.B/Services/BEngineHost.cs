@@ -26,6 +26,7 @@ public sealed class BEngineHost : IAsyncDisposable
     private ControlLinePoller? _poller;
     private CancellationTokenSource? _cts;
     private Task? _acceptTask;
+    private SerialParams _currentParams;
 
     /// <summary>Serial port name the user picked on the B-side (e.g. "COM3").</summary>
     public string? PortName { get; private set; }
@@ -49,6 +50,7 @@ public sealed class BEngineHost : IAsyncDisposable
     public async Task StartAsync(string portName, SerialParams initialParams, int listenPort, CancellationToken ct = default)
     {
         PortName = portName;
+        _currentParams = initialParams;
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
         // Open the real serial port.
@@ -102,6 +104,18 @@ public sealed class BEngineHost : IAsyncDisposable
                 };
 
                 _poller.Start();
+
+                // Tell the A-side our current serial params (we own the real port; the
+                // A-side displays "follows B-side" and syncs its virtual port EmuBR).
+                try
+                {
+                    var payload = new SetParamsMessage(_currentParams).ToPayload();
+                    await _connection.SendFrameAsync(new Frame(
+                        new FrameHeader(FrameHeader.CurrentVersion, FrameType.SetParams,
+                            1, NextSequence(), (ushort)payload.Length, FrameFlags.None), payload), ct);
+                }
+                catch { }
+
                 await _bridge.RunAsync(ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { }

@@ -42,10 +42,13 @@ public partial class WorkViewModel : ObservableObject, IDisposable
         if (role == AppRole.BSide)
         {
             RefreshPorts();
-            // Restore last selected port if it still exists.
-            SelectedPort = (!string.IsNullOrEmpty(s.LastSelectedPort) && Ports.Contains(s.LastSelectedPort))
-                ? s.LastSelectedPort
-                : (Ports.FirstOrDefault() ?? "");
+            // RefreshPorts picks first port; prefer the last-selected one if it still exists.
+            if (!string.IsNullOrEmpty(s.LastSelectedPort))
+            {
+                var match = Ports.FirstOrDefault(d =>
+                    _portDisplayToName.TryGetValue(d, out var n) && n == s.LastSelectedPort);
+                if (match is not null) SelectedPort = match;
+            }
         }
         VirtualPortDisplay = "待分配";
         Com0comStatus = "";
@@ -54,10 +57,15 @@ public partial class WorkViewModel : ObservableObject, IDisposable
 
     [ObservableProperty] private ObservableCollection<string> _ports = new();
     [ObservableProperty] private string _selectedPort = "";
+    /// <summary>Maps dropdown display string ("COM4 - USB-SERIAL CH340") to port name ("COM4").</summary>
+    private readonly Dictionary<string, string> _portDisplayToName = new(StringComparer.Ordinal);
+    private string SelectedPortName => _portDisplayToName.TryGetValue(SelectedPort ?? "", out var name) ? name : SelectedPort ?? "";
     [ObservableProperty] private string _remoteHost = "";
     [ObservableProperty] private int _remotePort = 51000;
     [ObservableProperty] private int _listenPort = 51000;
     [ObservableProperty] private int _baudRate = 115200;
+    /// <summary>A-side read-only baud display ("跟随 B 端：9600"); B-side hides this and uses BaudRate.</summary>
+    [ObservableProperty] private string _baudRateDisplay = "跟随 B 端";
     [ObservableProperty] private string _virtualPortDisplay = "";
     [ObservableProperty] private string _com0comStatus = "";
     [ObservableProperty] private bool _isRunning;
@@ -90,10 +98,19 @@ public partial class WorkViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void RefreshPorts()
     {
-        var current = SelectedPort;
-        Ports = new ObservableCollection<string>(SerialPortEnumerator.GetPortNames());
-        if (Ports.Contains(current)) SelectedPort = current;
-        else SelectedPort = Ports.FirstOrDefault() ?? "";
+        var currentName = SelectedPortName; // remember by port name, not display
+        _portDisplayToName.Clear();
+        var infos = SerialPortEnumerator.GetPortsWithDescription();
+        var displays = new List<string>();
+        foreach (var info in infos)
+        {
+            _portDisplayToName[info.Display] = info.PortName;
+            displays.Add(info.Display);
+        }
+        Ports = new ObservableCollection<string>(displays);
+        // Re-select the previously selected port (match by port name).
+        var match = infos.FirstOrDefault(i => i.PortName == currentName);
+        SelectedPort = match?.Display ?? (Ports.FirstOrDefault() ?? "");
     }
 
     [RelayCommand]
@@ -184,10 +201,14 @@ public partial class WorkViewModel : ObservableObject, IDisposable
             _aHost.StatsUpdated += OnStats;
             _aHost.Stopped += OnStopped;
             _aHost.ConnectionStateChanged += OnConnState;
+            _aHost.PeerParamsReceived += OnPeerParams;
 
-            var p = new SerialParams((uint)BaudRate, 8, StopBitsKind.One, Parity.None, FlowControl.None);
+            // A-side serial params don't matter (com0com virtual port). Use default;
+            // the B-side will report its real params, which we apply for EmuBR sync.
+            var p = SerialParams.Default;
             await _aHost.StartAsync(servicePort, p, ip, RemotePort);
             VirtualPortDisplay = $"{userPort}（串口软件开此口）↔ {servicePort}";
+            BaudRateDisplay = "跟随 B 端…";
             IsRunning = true;
             StatusText = $"已连接 {RemoteHost}:{RemotePort}";
             AppendLog($"已连接 B 端 {RemoteHost}:{RemotePort}，串口软件请打开 {userPort}");
@@ -218,15 +239,15 @@ public partial class WorkViewModel : ObservableObject, IDisposable
             _bHost.ConnectionStateChanged += OnConnState;
 
             var p = new SerialParams((uint)BaudRate, 8, StopBitsKind.One, Parity.None, FlowControl.None);
-            await _bHost.StartAsync(SelectedPort, p, ListenPort);
+            await _bHost.StartAsync(SelectedPortName, p, ListenPort);
             IsRunning = true;
-            StatusText = $"监听中（端口 {ListenPort}），共享 {SelectedPort}";
-            AppendLog($"已启动：串口 {SelectedPort} @ {BaudRate}，监听 {ListenPort}");
+            StatusText = $"监听中（端口 {ListenPort}），共享 {SelectedPortName}";
+            AppendLog($"已启动：串口 {SelectedPortName} @ {BaudRate}，监听 {ListenPort}");
             SaveSettings(); // persist for next launch
         }
         catch (Exception ex)
         {
-            AppendLog($"启动失败：{FriendlyError(ex, SelectedPort, ListenPort)}");
+            AppendLog($"启动失败：{FriendlyError(ex, SelectedPortName, ListenPort)}");
             if (_bHost is not null) { try { await _bHost.DisposeAsync(); } catch { } _bHost = null; }
         }
     }
@@ -262,6 +283,14 @@ public partial class WorkViewModel : ObservableObject, IDisposable
     private void OnStats(object? s, FlowStats stats) =>
         AppendLog($"流量：→网络 {stats.BytesSerialToNet} B，→串口 {stats.BytesNetToSerial} B");
 
+    private void OnPeerParams(object? s, SerialParams p)
+    {
+        _window.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            BaudRateDisplay = $"跟随 B 端：{(p.BaudRate == SerialParams.UnknownBaudRate ? "未知" : p.BaudRate)}";
+        }));
+    }
+
     private void OnStopped(object? s, Exception? ex)
     {
         // Bridge stopped (peer disconnected, or our own dispose). If we're already
@@ -277,7 +306,7 @@ public partial class WorkViewModel : ObservableObject, IDisposable
             _window.Dispatcher.BeginInvoke(new Action(() =>
             {
                 AppendLog($"A 端已断开（继续监听，等待重连）{(ex is null ? "" : "：" + ex.Message)}");
-                StatusText = $"监听中（等待 A 端连接），共享 {SelectedPort}";
+                StatusText = $"监听中（等待 A 端连接），共享 {SelectedPortName}";
             }));
             return;
         }
@@ -301,7 +330,7 @@ public partial class WorkViewModel : ObservableObject, IDisposable
             {
                 AppendLog("对端已连接");
                 StatusText = IsBSide
-                    ? $"监听中（A 端已连接），共享 {SelectedPort}"
+                    ? $"监听中（A 端已连接），共享 {SelectedPortName}"
                     : $"已连接 {RemoteHost}:{RemotePort}";
             }
             else
@@ -310,7 +339,7 @@ public partial class WorkViewModel : ObservableObject, IDisposable
                 if (IsBSide)
                 {
                     // B-side stays listening; don't say "stopping".
-                    StatusText = $"监听中（等待 A 端连接），共享 {SelectedPort}";
+                    StatusText = $"监听中（等待 A 端连接），共享 {SelectedPortName}";
                 }
                 else if (IsRunning)
                 {
@@ -329,7 +358,7 @@ public partial class WorkViewModel : ObservableObject, IDisposable
         // Serial port in use ("拒绝访问" / "Access denied")
         if (ex is System.UnauthorizedAccessException || m.Contains("拒绝访问") || m.Contains("Access Denied"))
         {
-            return $"串口 {SelectedPort} 被其他程序占用，请关闭占用它的程序后重试";
+            return $"串口 {hostOrPort} 被其他程序占用，请关闭占用它的程序后重试";
         }
         // TCP port in use
         if (ex is System.Net.Sockets.SocketException se &&
@@ -354,9 +383,8 @@ public partial class WorkViewModel : ObservableObject, IDisposable
             var s = AppSettings.Load();
             // Preserve the assigned port pair (don't overwrite UserPort/ServicePort).
             if (IsASide) s.LastRemoteHost = RemoteHost;
-            if (IsBSide) s.LastSelectedPort = SelectedPort;
+            if (IsBSide) { s.LastSelectedPort = SelectedPortName; s.LastBaudRate = BaudRate; }
             s.LastTcpPort = IsASide ? RemotePort : ListenPort;
-            s.LastBaudRate = BaudRate;
             s.Save();
         }
         catch { /* settings persistence is best-effort */ }

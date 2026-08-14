@@ -22,6 +22,7 @@ public sealed class VirtualSerialPort : ISerialPort
     private volatile bool _disposed;
 
     public string PortName { get; }
+    public int BytesToRead => _port?.BytesToRead ?? 0;
     public bool IsOpen => _port?.IsOpen ?? false;
 
     public event EventHandler<ModemStatusFlags>? ControlLinesChanged;

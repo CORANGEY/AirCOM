@@ -10,6 +10,7 @@
   <ItemGroup>
     <PackageReference Include="System.IO.Ports" Version="$(SystemIOPortsVersion)" />
     <PackageReference Include="System.IO.Pipelines" Version="$(SystemIOPipelinesVersion)" />
+    <PackageReference Include="System.Management" Version="$(SystemManagementVersion)" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="$(LoggingAbstractionsVersion)" />
   </ItemGroup>
 

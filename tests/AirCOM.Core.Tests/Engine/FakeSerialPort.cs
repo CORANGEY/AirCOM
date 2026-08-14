@@ -14,6 +14,7 @@ internal sealed class FakeSerialPort : ISerialPort
     private readonly System.Collections.Concurrent.ConcurrentQueue<byte> _rxQueue = new();
     public bool IsOpen { get; private set; } = true;
     public string PortName { get; }
+    public int BytesToRead => _rxQueue.Count;
     public List<byte> Written { get; } = new();
     public SerialParams LastParams { get; private set; }
 
