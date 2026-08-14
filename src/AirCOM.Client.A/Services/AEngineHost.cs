@@ -86,6 +86,38 @@ public sealed class AEngineHost : IAsyncDisposable
         _runTask = Task.Run(() => _bridge.RunAsync(_cts.Token), _cts.Token);
     }
 
+    /// <summary>Connects to the B-side via an already-matched relay connection (network mode).</summary>
+    public async Task StartViaRelayAsync(string virtualPortName, SerialParams initialParams,
+        FramedConnection relayConnection, CancellationToken ct = default)
+    {
+        VirtualPortName = virtualPortName;
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+        _serial = new VirtualSerialPort(virtualPortName, _loggerFactory?.CreateLogger<VirtualSerialPort>());
+        await _serial.OpenAsync(initialParams, ct);
+
+        // The relay connection is already matched and its pump is running. We take
+        // ownership of it (don't dispose twice on failure - the caller transfers it).
+        _connection = relayConnection;
+        ConnectionStateChanged?.Invoke(this, true);
+
+        _poller = new ControlLinePoller(_serial, _connection, NextSequence,
+            _loggerFactory?.CreateLogger<ControlLinePoller>());
+        _bridge = new SerialBridge(_serial, _connection, BridgeRole.ASide,
+            _loggerFactory?.CreateLogger<SerialBridge>());
+        _bridge.ControlFrameHandler = HandleControlFrameAsync;
+        _bridge.StatsUpdated += (s, stats) => StatsUpdated?.Invoke(s, stats);
+        _bridge.Stopped += (s, ex) =>
+        {
+            AirCOM.Core.Util.DiagLog.Log($"AEngineHost: bridge Stopped event (ex={ex?.Message ?? "null"})");
+            Stopped?.Invoke(s, ex);
+            ConnectionStateChanged?.Invoke(this, false);
+        };
+
+        _poller.Start();
+        _runTask = Task.Run(() => _bridge.RunAsync(_cts.Token), _cts.Token);
+    }
+
     /// <summary>Serial params last received from the B-side (the authoritative value).</summary>
     public SerialParams? PeerParams { get; private set; }
 

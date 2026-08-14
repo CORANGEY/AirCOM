@@ -66,6 +66,49 @@ public sealed class BEngineHost : IAsyncDisposable
         _acceptTask = Task.Run(() => AcceptLoopAsync(_cts.Token), _cts.Token);
     }
 
+    /// <summary>Starts via an already-matched relay connection (network mode). No TCP listener.</summary>
+    public async Task StartViaRelayAsync(string portName, SerialParams initialParams,
+        FramedConnection relayConnection, CancellationToken ct = default)
+    {
+        PortName = portName;
+        _currentParams = initialParams;
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+        _serial = new RealSerialPort(portName, _loggerFactory?.CreateLogger<RealSerialPort>());
+        await _serial.OpenAsync(initialParams, ct);
+        _serial.ControlLinesChanged += OnLocalControlLinesChanged;
+
+        // The relay connection is already matched and pumping. Run the bridge on it.
+        _connection = relayConnection;
+        ConnectionStateChanged?.Invoke(this, true);
+
+        _poller = new ControlLinePoller(_serial!, _connection, NextSequence,
+            _loggerFactory?.CreateLogger<ControlLinePoller>());
+        _bridge = new SerialBridge(_serial!, _connection, BridgeRole.BSide,
+            _loggerFactory?.CreateLogger<SerialBridge>());
+        _bridge.ControlFrameHandler = HandleControlFrameAsync;
+        _bridge.StatsUpdated += (s, stats) => StatsUpdated?.Invoke(s, stats);
+        _bridge.Stopped += (s, ex) =>
+        {
+            Stopped?.Invoke(s, ex);
+            ConnectionStateChanged?.Invoke(this, false);
+        };
+
+        _poller.Start();
+
+        // Report current params to the A-side (owns the real port).
+        try
+        {
+            var payload = new SetParamsMessage(_currentParams).ToPayload();
+            await _connection.SendFrameAsync(new Frame(
+                new FrameHeader(FrameHeader.CurrentVersion, FrameType.SetParams,
+                    1, NextSequence(), (ushort)payload.Length, FrameFlags.None), payload), ct);
+        }
+        catch { }
+
+        await _bridge.RunAsync(ct).ConfigureAwait(false);
+    }
+
     private async Task AcceptLoopAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)

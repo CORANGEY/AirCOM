@@ -9,6 +9,7 @@ using AirCOM.Client.B.Services;
 using AirCOM.Core.Engine;
 using AirCOM.Core.Protocol;
 using AirCOM.Core.Serial;
+using AirCOM.Core.Transport;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -70,6 +71,22 @@ public partial class WorkViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _com0comStatus = "";
     [ObservableProperty] private bool _isRunning;
     [ObservableProperty] private string _statusText = "未启动";
+
+    // --- Network mode ---
+    /// <summary>0 = LAN direct, 1 = network pairing (relay).</summary>
+    [ObservableProperty] private int _connectionMode;
+    public bool IsLanMode => ConnectionMode == 0;
+    public bool IsNetworkMode => ConnectionMode == 1;
+    partial void OnConnectionModeChanged(int value)
+    {
+        OnPropertyChanged(nameof(IsLanMode));
+        OnPropertyChanged(nameof(IsNetworkMode));
+    }
+    [ObservableProperty] private string _serverHost = "aircom.example.com";
+    [ObservableProperty] private int _serverPort = 51000;
+    [ObservableProperty] private string _pairingCode = "";
+    [ObservableProperty] private string _pairingCodeDisplay = "";
+    private NetworkPairingClient? _pairingClient;
     [ObservableProperty] private string _logText = "";
     [ObservableProperty] private string _actionButtonLabel = "启动";
     [ObservableProperty] private System.Windows.Media.Brush _actionButtonColor = System.Windows.Media.Brushes.DodgerBlue;
@@ -203,20 +220,33 @@ public partial class WorkViewModel : ObservableObject, IDisposable
             _aHost.ConnectionStateChanged += OnConnState;
             _aHost.PeerParamsReceived += OnPeerParams;
 
-            // A-side serial params don't matter (com0com virtual port). Use default;
-            // the B-side will report its real params, which we apply for EmuBR sync.
             var p = SerialParams.Default;
-            await _aHost.StartAsync(servicePort, p, ip, RemotePort);
-            VirtualPortDisplay = $"{userPort}（串口软件开此口）↔ {servicePort}";
-            BaudRateDisplay = "跟随 B 端…";
-            IsRunning = true;
-            StatusText = $"已连接 {RemoteHost}:{RemotePort}";
-            AppendLog($"已连接 B 端 {RemoteHost}:{RemotePort}，串口软件请打开 {userPort}");
+
+            if (IsNetworkMode)
+            {
+                // Pair via the relay server, then bridge over the matched connection.
+                var conn = await PairViaServerAsync(isBSide: false);
+                await _aHost.StartViaRelayAsync(servicePort, p, conn);
+                VirtualPortDisplay = $"{userPort}（串口软件开此口）↔ {servicePort}";
+                BaudRateDisplay = "跟随 B 端…";
+                IsRunning = true;
+                StatusText = "网络已配对，已连接 B 端";
+                AppendLog($"网络配对成功，串口软件请打开 {userPort}");
+            }
+            else
+            {
+                await _aHost.StartAsync(servicePort, p, ip, RemotePort);
+                VirtualPortDisplay = $"{userPort}（串口软件开此口）↔ {servicePort}";
+                BaudRateDisplay = "跟随 B 端…";
+                IsRunning = true;
+                StatusText = $"已连接 {RemoteHost}:{RemotePort}";
+                AppendLog($"已连接 B 端 {RemoteHost}:{RemotePort}，串口软件请打开 {userPort}");
+            }
             SaveSettings(); // persist for next launch
         }
         catch (Exception ex)
         {
-            string msg = FriendlyError(ex, RemoteHost, RemotePort);
+            string msg = ex is InvalidOperationException ? ex.Message : FriendlyError(ex, RemoteHost, RemotePort);
             AppendLog($"连接失败：{msg}");
             Com0comStatus = $"失败：{msg}";
             if (_aHost is not null) { try { await _aHost.DisposeAsync(); } catch { } _aHost = null; }
@@ -239,17 +269,63 @@ public partial class WorkViewModel : ObservableObject, IDisposable
             _bHost.ConnectionStateChanged += OnConnState;
 
             var p = new SerialParams((uint)BaudRate, 8, StopBitsKind.One, Parity.None, FlowControl.None);
-            await _bHost.StartAsync(SelectedPortName, p, ListenPort);
-            IsRunning = true;
-            StatusText = $"监听中（端口 {ListenPort}），共享 {SelectedPortName}";
-            AppendLog($"已启动：串口 {SelectedPortName} @ {BaudRate}，监听 {ListenPort}");
+
+            if (IsNetworkMode)
+            {
+                // Generate a fresh 6-digit code, pair via the server, then bridge.
+                PairingCodeDisplay = GeneratePairingCode();
+                StatusText = $"等待 A 端配对…  配对码：{PairingCodeDisplay}";
+                AppendLog($"正在连接服务器 {ServerHost}:{ServerPort}，配对码 {PairingCodeDisplay}…");
+                var conn = await PairViaServerAsync(isBSide: true, code: PairingCodeDisplay);
+                await _bHost.StartViaRelayAsync(SelectedPortName, p, conn);
+                IsRunning = true;
+                StatusText = $"网络已配对，共享 {SelectedPortName}";
+                AppendLog($"配对成功，A 端已连接，共享 {SelectedPortName}");
+            }
+            else
+            {
+                await _bHost.StartAsync(SelectedPortName, p, ListenPort);
+                IsRunning = true;
+                StatusText = $"监听中（端口 {ListenPort}），共享 {SelectedPortName}";
+                AppendLog($"已启动：串口 {SelectedPortName} @ {BaudRate}，监听 {ListenPort}");
+            }
             SaveSettings(); // persist for next launch
         }
         catch (Exception ex)
         {
-            AppendLog($"启动失败：{FriendlyError(ex, SelectedPortName, ListenPort)}");
+            AppendLog($"启动失败：{(ex is InvalidOperationException ? ex.Message : FriendlyError(ex, SelectedPortName, ListenPort))}");
             if (_bHost is not null) { try { await _bHost.DisposeAsync(); } catch { } _bHost = null; }
         }
+    }
+
+    /// <summary>Connects to the relay server and completes the 6-digit pairing handshake.</summary>
+    private async Task<FramedConnection> PairViaServerAsync(bool isBSide, string? code = null)
+    {
+        if (!IPAddress.TryParse(ServerHost, out var serverIp))
+        {
+            // Allow hostnames (DNS resolves in TcpTransport via DnsEndPoint path? No -
+            // TcpTransport needs IPEndPoint or DnsEndPoint; build one).
+            throw new InvalidOperationException("服务器地址格式不正确（请填 IP）");
+        }
+        code ??= PairingCode;
+        if (string.IsNullOrEmpty(code) || code.Length != 6 || !code.All(char.IsDigit))
+            throw new InvalidOperationException("配对码必须是 6 位数字");
+
+        _pairingClient?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        _pairingClient = new NetworkPairingClient();
+        _pairingClient.PairingFailed += (s, reason) => AppendLog($"配对失败：{reason}");
+
+        AppendLog(isBSide ? "已连服务器，等待 A 端配对…" : $"正在配对（码 {code}）…");
+        var conn = await _pairingClient.PairAsync(new IPEndPoint(serverIp, ServerPort), code, isBSide);
+        AppendLog("服务器配对成功");
+        return conn;
+    }
+
+    /// <summary>Generates a random 6-digit pairing code.</summary>
+    private string GeneratePairingCode()
+    {
+        var rng = new Random();
+        return rng.Next(0, 1000000).ToString("D6");
     }
 
     private async Task StopInternalAsync()
@@ -257,6 +333,7 @@ public partial class WorkViewModel : ObservableObject, IDisposable
         _disposing = true; // suppress OnStopped re-entry while we dispose
         if (_aHost is not null) { try { await _aHost.DisposeAsync(); } catch { } _aHost = null; }
         if (_bHost is not null) { try { await _bHost.DisposeAsync(); } catch { } _bHost = null; }
+        if (_pairingClient is not null) { try { await _pairingClient.DisposeAsync(); } catch { } _pairingClient = null; }
         _disposing = false;
         IsRunning = false;
         StatusText = "已停止";
@@ -401,6 +478,7 @@ public partial class WorkViewModel : ObservableObject, IDisposable
         {
             if (_aHost is not null) { _aHost.DisposeAsync().AsTask().GetAwaiter().GetResult(); _aHost = null; }
             if (_bHost is not null) { _bHost.DisposeAsync().AsTask().GetAwaiter().GetResult(); _bHost = null; }
+            if (_pairingClient is not null) { _pairingClient.DisposeAsync().AsTask().GetAwaiter().GetResult(); _pairingClient = null; }
         }
         catch { }
     }
