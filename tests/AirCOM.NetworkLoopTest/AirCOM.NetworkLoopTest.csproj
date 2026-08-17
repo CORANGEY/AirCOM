@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>AirCOM.NetworkLoopTest</RootNamespace>
+    <AssemblyName>AirCOM.NetworkLoopTest</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AirCOM.Core\AirCOM.Core.csproj" />
+    <ProjectReference Include="..\..\src\AirCOM.Server\AirCOM.Server.csproj" />
+    <ProjectReference Include="..\..\src\AirCOM.App\AirCOM.App.csproj" />
+  </ItemGroup>
+
+</Project>

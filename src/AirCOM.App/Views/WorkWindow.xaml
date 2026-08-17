@@ -3,14 +3,16 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:AirCOM.App.ViewModels"
         xmlns:local="clr-namespace:AirCOM.App.Views"
-        Title="{Binding WindowTitle}" Height="640" Width="760"
+        Title="{Binding WindowTitle}" Height="680" Width="800"
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <local:InverseBoolConverter x:Key="InverseBool"/>
         <local:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <local:ModeToBoolConverter x:Key="ModeToBool"/>
     </Window.Resources>
     <Grid Margin="14">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -23,8 +25,40 @@
             <Button Content="返回选择角色" Command="{Binding BackCommand}" Margin="24,0,0,0" Padding="12,2" Background="Transparent" BorderBrush="Gray"/>
         </StackPanel>
 
+        <!-- 连接模式 -->
+        <GroupBox Header="连接方式" Grid.Row="1" Margin="0,0,0,8" Padding="8">
+            <StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                    <RadioButton Content="局域网直连（同一网段，延迟最低）" IsChecked="{Binding ConnectionMode, Converter={StaticResource ModeToBool}, ConverterParameter=0}" Margin="0,0,24,0"/>
+                    <RadioButton Content="网络配对（跨网络，经服务器中继）" IsChecked="{Binding ConnectionMode, Converter={StaticResource ModeToBool}, ConverterParameter=1}"/>
+                </StackPanel>
+
+                <!-- 网络模式：服务器 + 配对码 -->
+                <StackPanel Orientation="Horizontal"
+                            Visibility="{Binding IsNetworkMode, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="服务器:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBox Text="{Binding ServerHost}" MinWidth="150" VerticalAlignment="Center"/>
+                    <TextBlock Text="端口:" VerticalAlignment="Center" Margin="12,0,6,0"/>
+                    <TextBox Text="{Binding ServerPort}" MinWidth="60" VerticalAlignment="Center"/>
+
+                    <!-- A 端：填配对码 -->
+                    <TextBlock Text="配对码:" VerticalAlignment="Center" Margin="16,0,6,0"
+                               Visibility="{Binding IsASide, Converter={StaticResource BoolToVis}}"/>
+                    <TextBox Text="{Binding PairingCode}" MinWidth="80" MaxLength="6" VerticalAlignment="Center"
+                             Visibility="{Binding IsASide, Converter={StaticResource BoolToVis}}"/>
+
+                    <!-- B 端：显示生成的配对码（大号只读） -->
+                    <TextBlock Text="配对码:" VerticalAlignment="Center" Margin="16,0,6,0" FontWeight="Bold"
+                               Visibility="{Binding IsBSide, Converter={StaticResource BoolToVis}}"/>
+                    <TextBlock Text="{Binding PairingCodeDisplay}" VerticalAlignment="Center" FontSize="20" FontWeight="Bold"
+                               Foreground="DodgerBlue" MinWidth="90"
+                               Visibility="{Binding IsBSide, Converter={StaticResource BoolToVis}}"/>
+                </StackPanel>
+            </StackPanel>
+        </GroupBox>
+
         <!-- 配置区 -->
-        <GroupBox Header="配置" Grid.Row="1" Margin="0,0,0,8" Padding="8">
+        <GroupBox Header="配置" Grid.Row="2" Margin="0,0,0,8" Padding="8">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -44,7 +78,7 @@
                 <Button Grid.Column="2" Content="刷新" Command="{Binding RefreshPortsCommand}" Margin="6,0,0,0" Padding="12,2"
                         Visibility="{Binding IsBSide, Converter={StaticResource BoolToVis}}"/>
 
-                <!-- A 端：填 B 端 IP -->
+                <!-- A 端（局域网模式）：填 B 端 IP -->
                 <TextBlock Grid.Column="0" Text="B 端 IP:" VerticalAlignment="Center" Margin="0,0,6,0"
                            Visibility="{Binding IsASide, Converter={StaticResource BoolToVis}}"/>
                 <TextBox Grid.Column="1" Text="{Binding RemoteHost}" MinWidth="160" VerticalAlignment="Center"
@@ -54,7 +88,7 @@
                 <TextBox Grid.Column="3" Text="{Binding RemotePort}" MinWidth="70" VerticalAlignment="Center"
                          Visibility="{Binding IsASide, Converter={StaticResource BoolToVis}}"/>
 
-                <!-- B 端：监听端口 -->
+                <!-- B 端（局域网模式）：监听端口 -->
                 <TextBlock Grid.Column="3" Text="监听端口:" VerticalAlignment="Center" Margin="16,0,6,0"
                            Visibility="{Binding IsBSide, Converter={StaticResource BoolToVis}}"/>
                 <TextBox Grid.Column="4" Text="{Binding ListenPort}" MinWidth="70" VerticalAlignment="Center"
@@ -68,7 +102,7 @@
             </Grid>
         </GroupBox>
 
-        <StackPanel Orientation="Horizontal" Grid.Row="2" Margin="0,0,0,8">
+        <StackPanel Orientation="Horizontal" Grid.Row="3" Margin="0,0,0,8">
             <!-- B 端：波特率可设（决定真实串口参数，唯一有效处） -->
             <TextBlock Text="波特率:" VerticalAlignment="Center" Margin="0,0,6,0"
                        Visibility="{Binding IsBSide, Converter={StaticResource BoolToVis}}"/>
@@ -85,9 +119,9 @@
                        Visibility="{Binding IsASide, Converter={StaticResource BoolToVis}}"/>
         </StackPanel>
 
-        <TextBlock Grid.Row="3" Text="{Binding StatusText}" FontWeight="Bold" Margin="0,0,0,8" VerticalAlignment="Top"/>
+        <TextBlock Grid.Row="4" Text="{Binding StatusText}" FontWeight="Bold" Margin="0,0,0,8" VerticalAlignment="Top"/>
 
-        <GroupBox Header="日志" Grid.Row="3" Margin="0,28,0,0" Padding="4">
+        <GroupBox Header="日志" Grid.Row="4" Margin="0,28,0,0" Padding="4">
             <TextBox Text="{Binding LogText}" IsReadOnly="True" TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12"/>
         </GroupBox>
